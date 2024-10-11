@@ -1,0 +1,14 @@
+<!-- painter/templates/painter/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Painter</title>
+</head>
+<body>
+    <h1>Virtual Painter</h1>
+    <!-- Video feed is sourced from the video_feed URL -->
+    <img id="video" src="{% url 'video_feed' %}" alt="Video Feed" style="width: 80%; height: auto;">
+</body>
+</html>

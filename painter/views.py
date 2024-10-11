@@ -1,0 +1,134 @@
+# painter/views.py
+from django.shortcuts import render
+from django.http import StreamingHttpResponse
+import cv2
+import mediapipe as mp
+import numpy as np
+import os
+
+# Load the header images
+folderPath = os.path.join('painter', 'static', 'painter', 'Header')
+myList = os.listdir(folderPath)
+overlayList = [cv2.imread(os.path.join(folderPath, imPath)) for imPath in myList]
+
+# Setting up Mediapipe and initial variables
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+width, height = 1280, 720
+drawColor = (0, 0, 255)
+thickness = 20
+tipIds = [4, 8, 12, 16, 20]
+xp, yp = [0, 0]
+header = overlayList[0]
+imgCanvas = np.zeros((height, width, 3), np.uint8)
+
+# Index page view
+def index(request):
+    return render(request, 'painter/index.html')
+
+# def video():
+#     #cap = cv2.VideoCapture('v4l2src device=/dev/video0 ! videoconvert ! appsink', cv2.CAP_GSTREAMER)
+#     cap = cv2.VideoCapture(cv2.CAP_V4L2)
+#     if not cap.isOpened():
+#         print("Error: Could not open camera.")
+#     return cap
+
+# Generator function to get video feed frames
+def gen():
+    global xp, yp, imgCanvas, header, drawColor
+
+    #cap = cv2.VideoCapture(cv2.CAP_GSTREAMER)
+    #cap = cv2.VideoCapture(0,cv2.CAP_V4L2)
+    #cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    #cap = cv2.VideoCapture(0, cv2.CAP_FFMPEG)
+    #cap = cv2.VideoCapture(cv2.CAP_MSMF)
+    #cap = cv2.VideoCapture('/dev/video0')
+
+    if not cap.isOpened():
+        print("Error: Could not open camera.")
+    cap.set(3, width)
+    cap.set(4, height)
+
+    with mp_hands.Hands(min_detection_confidence=0.85, min_tracking_confidence=0.5, max_num_hands=1) as hands:
+        while cap.isOpened():
+            success, image = cap.read()
+            if not success:
+                break
+
+            # Flip the image for a selfie-view and convert to RGB
+            image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            results = hands.process(image)
+
+            # Convert back to BGR for OpenCV processing
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            # Hand Landmark Detection
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    points = [(int(lm.x * width), int(lm.y * height)) for lm in hand_landmarks.landmark]
+
+                    if points:
+                        x1, y1 = points[8]  # Index finger
+                        x2, y2 = points[12] # Middle finger
+
+                        # Determine which fingers are up
+                        fingers = [
+                            1 if points[tipIds[0]][0] < points[tipIds[0] - 1][0] else 0
+                        ] + [
+                            1 if points[tipIds[i]][1] < points[tipIds[i] - 2][1] else 0
+                            for i in range(1, 5)
+                        ]
+
+                        # Selection Mode
+                        if fingers[1] and fingers[2] and all(fingers[i] == 0 for i in [0, 3, 4]):
+                            xp, yp = x1, y1
+                            if y1 < 125:
+                                if 170 < x1 < 295:
+                                    header = overlayList[0]
+                                    drawColor = (0, 0, 255)
+                                elif 436 < x1 < 561:
+                                    header = overlayList[1]
+                                    drawColor = (255, 0, 0)
+                                elif 700 < x1 < 825:
+                                    header = overlayList[2]
+                                    drawColor = (0, 255, 0)
+                                elif 980 < x1 < 1105:
+                                    header = overlayList[3]
+                                    drawColor = (0, 0, 0)
+                            cv2.rectangle(image, (x1-10, y1-15), (x2+10, y2+23), drawColor, cv2.FILLED)
+
+                        # Draw Mode
+                        if fingers[1] and all(fingers[i] == 0 for i in [0, 2, 3, 4]):
+                            cv2.circle(image, (x1, y1), int(thickness/2), drawColor, cv2.FILLED)
+                            if xp == 0 and yp == 0:
+                                xp, yp = x1, y1
+                            cv2.line(imgCanvas, (xp, yp), (x1, y1), drawColor, thickness)
+                            xp, yp = x1, y1
+
+                        # Clear Canvas
+                        if all(fingers[i] == 0 for i in range(5)):
+                            imgCanvas = np.zeros((height, width, 3), np.uint8)
+                            xp, yp = x1, y1
+
+            # Overlay header and drawing
+            image[0:125, 0:width] = header
+            imgGray = cv2.cvtColor(imgCanvas, cv2.COLOR_BGR2GRAY)
+            _, imgInv = cv2.threshold(imgGray, 5, 255, cv2.THRESH_BINARY_INV)
+            imgInv = cv2.cvtColor(imgInv, cv2.COLOR_GRAY2BGR)
+            image = cv2.bitwise_and(image, imgInv)
+            image = cv2.bitwise_or(image, imgCanvas)
+
+            # Encode frame for HTTP streaming
+            ret, jpeg = cv2.imencode('.jpg', image)
+            if ret:
+                frame = jpeg.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+
+    cap.release()
+
+# Video feed view
+def video_feed(request):
+    return StreamingHttpResponse(gen(), content_type='multipart/x-mixed-replace; boundary=frame')
