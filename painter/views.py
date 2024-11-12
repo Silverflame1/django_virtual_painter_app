@@ -5,6 +5,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import os
+from datetime import datetime, timedelta
+import math
 
 # Load the header images
 folderPath = os.path.join('painter', 'static', 'painter', 'Header')
@@ -19,7 +21,7 @@ drawColor = (0, 0, 255)
 thickness = 20
 tipIds = [4, 8, 12, 16, 20]
 xp, yp = [0, 0]
-header = overlayList[0]
+header = overlayList[4]
 imgCanvas = np.zeros((height, width, 3), np.uint8)
 
 # Index page view
@@ -35,7 +37,11 @@ def index(request):
 
 # Generator function to get video feed frames
 def gen():
-    global xp, yp, imgCanvas, header, drawColor
+    global xp, yp, imgCanvas, header, drawColor, thickness, lastsave
+
+    lastsave = datetime.now() - timedelta(seconds=5)
+
+    cooldown_interval = timedelta(seconds=5)
 
     #cap = cv2.VideoCapture(cv2.CAP_GSTREAMER)
     #cap = cv2.VideoCapture(0,cv2.CAP_V4L2)
@@ -49,6 +55,9 @@ def gen():
         print("Error: Could not open camera.")
     cap.set(3, width)
     cap.set(4, height)
+
+    downloads_path = os.path.join(os.path.dirname(__file__), 'downloads')
+    os.makedirs(downloads_path, exist_ok=True)
 
     with mp_hands.Hands(min_detection_confidence=0.85, min_tracking_confidence=0.5, max_num_hands=1) as hands:
         while cap.isOpened():
@@ -72,6 +81,8 @@ def gen():
                     if points:
                         x1, y1 = points[8]  # Index finger
                         x2, y2 = points[12] # Middle finger
+                        x3, y3 = points[4]  # Thumb
+                        x4, y4 = points[20]  # Pinky
 
                         # Determine which fingers are up
                         fingers = [
@@ -85,19 +96,39 @@ def gen():
                         if fingers[1] and fingers[2] and all(fingers[i] == 0 for i in [0, 3, 4]):
                             xp, yp = x1, y1
                             if y1 < 125:
-                                if 170 < x1 < 295:
-                                    header = overlayList[0]
+                                if 0 < x1 < 143:
+                                    header = overlayList[4]
                                     drawColor = (0, 0, 255)
-                                elif 436 < x1 < 561:
-                                    header = overlayList[1]
+                                elif 142 < x1 < 286:
+                                    header = overlayList[4]
                                     drawColor = (255, 0, 0)
-                                elif 700 < x1 < 825:
-                                    header = overlayList[2]
+                                elif 285 < x1 < 432:
+                                    header = overlayList[4]
                                     drawColor = (0, 255, 0)
-                                elif 980 < x1 < 1105:
-                                    header = overlayList[3]
+                                elif 433 < x1 < 578:
+                                    header = overlayList[4]
+                                    drawColor = (128, 0, 128)
+                                elif 579 < x1 < 726:
+                                    header = overlayList[4]
+                                    drawColor = (0, 255, 255)
+                                elif 727 < x1 < 873:
+                                    header = overlayList[4]
+                                    drawColor = (0, 165, 255)
+                                elif 874 < x1 < 1020:
+                                    header = overlayList[4]
+                                    drawColor = (255, 255, 0)
+                                elif 1021 < x1 < 1164:
+                                    header = overlayList[4]
+                                    drawColor = (42, 42, 165)
+                                elif 1164 < x1 < 1280:
+                                    header = overlayList[4]
                                     drawColor = (0, 0, 0)
                             cv2.rectangle(image, (x1-10, y1-15), (x2+10, y2+23), drawColor, cv2.FILLED)
+
+                        if (fingers[1] and fingers[4]) and all(fingers[i] == 0 for i in [0, 2, 3]):
+                            # The line between the index and the pinky indicates the Stand by Mode
+                            cv2.line(image, (xp, yp), (x4, y4), drawColor, 5)
+                            xp, yp = [x1, y1]
 
                         # Draw Mode
                         if fingers[1] and all(fingers[i] == 0 for i in [0, 2, 3, 4]):
@@ -111,6 +142,61 @@ def gen():
                         if all(fingers[i] == 0 for i in range(5)):
                             imgCanvas = np.zeros((height, width, 3), np.uint8)
                             xp, yp = x1, y1
+
+                        # Set Thickness
+                        selecting = [1, 1, 0, 0, 0]
+                        setting = [1, 1, 0, 0, 1]
+                        if all(fingers[i] == j for i, j in zip(range(0, 5), selecting)) or all(
+                                fingers[i] == j for i, j in zip(range(0, 5), setting)):
+
+                            # Getting the radius of the circle that will represent the thickness of the draw
+                            # using the distance between the index finger and the thumb.
+                            r = int(math.sqrt((x1 - x3) ** 2 + (y1 - y3) ** 2) / 3)
+
+                            # Getting the middle point between these two fingers
+                            x0, y0 = [(x1 + x3) / 2, (y1 + y3) / 2]
+
+                            # Getting the vector that is orthogonal to the line formed between
+                            # these two fingers
+                            v1, v2 = [x1 - x3, y1 - y3]
+                            v1, v2 = [-v2, v1]
+
+                            # Normalizing it
+                            mod_v = math.sqrt(v1 ** 2 + v2 ** 2)
+                            v1, v2 = [v1 / mod_v, v2 / mod_v]
+
+                            # Draw the circle that represents the draw thickness in (x0, y0) and orthogonaly
+                            # translated c units
+                            c = 3 + r
+                            x0, y0 = [int(x0 - v1 * c), int(y0 - v2 * c)]
+                            cv2.circle(image, (x0, y0), int(r / 2), drawColor, -1)
+
+                            # Setting the thickness chosen when the pinky finger is up
+                            if fingers[4]:
+                                thickness = r
+                                cv2.putText(image, 'Check', (x4 - 25, y4 - 8), cv2.FONT_HERSHEY_TRIPLEX, 0.8, (0, 0, 0),
+                                            1)
+                            xp, yp = [x1, y1]
+
+                        # To download
+                        if fingers[0]==1 and fingers[1]==1 and fingers[2]==1 and fingers[3] == 0 and fingers[4] == 0:
+                            current_time = datetime.now()
+                            if current_time - lastsave >= cooldown_interval:
+                                lastsave = current_time
+                                print("Save gesture detected")
+                                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                filename = os.path.join(downloads_path, f'drawing_{timestamp}.png')
+
+                                # Combine the current video frame with the drawing canvas
+                                imgGray = cv2.cvtColor(imgCanvas, cv2.COLOR_BGR2GRAY)
+                                _, imgInv = cv2.threshold(imgGray, 5, 255, cv2.THRESH_BINARY_INV)
+                                imgInv = cv2.cvtColor(imgInv, cv2.COLOR_GRAY2BGR)
+                                saved_image = cv2.bitwise_and(image, imgInv)
+                                saved_image = cv2.bitwise_or(saved_image, imgCanvas)
+
+                                # Save the image to the downloads folder
+                                cv2.imwrite(filename, saved_image)
+                                print(f"Image saved as {filename}")
 
             # Overlay header and drawing
             image[0:125, 0:width] = header
