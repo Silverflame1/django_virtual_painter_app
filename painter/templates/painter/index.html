@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Virtual Painter - Webcam Access</title>
+
+    <!-- Link to external CSS -->
+    <link rel="stylesheet" href="{% static 'painter/css/styles.css' %}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header section -->
+        <header>
+            <h1>AI Virtual Painter</h1>
+            <p>Paint using gestures and control with your hands!</p>
+        </header>
+
+        <!-- Video feed container -->
+        <div class="video-container">
+            <img id="video" src="{% url 'video_feed' %}" alt="Video Feed">
+        </div>
+
+        <!-- Controls for enabling/disabling webcam -->
+        <div class="controls">
+            <button id="startBtn" class="btn">Start Webcam</button>
+            <button id="stopBtn" class="btn" disabled>Stop Webcam</button>
+        </div>
+
+        <!-- Footer section -->
+        <footer>
+            <p>Developed by <strong>Sayan Mondal</strong>, <strong>Biprajit Ghoshal</strong>, <strong>Shubham Chatterjee</strong></p>
+        </footer>
+    </div>
+
+    <!-- Link to external JavaScript -->
+    <script src="{% static 'painter/js/script.js' %}"></script>
+</body>
+</html>
