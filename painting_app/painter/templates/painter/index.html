@@ -1,0 +1,53 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Virtual Painter - Webcam Access</title>
+
+    <!-- Link to external CSS -->
+    <link rel="stylesheet" href="{% static 'painter/css/styles.css' %}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header section -->
+        <header>
+            <h1>AI Virtual Painter</h1>
+            <p>Paint using gestures and control with your hands!</p>
+        </header>
+
+        <!-- Instructions section -->
+        <section class="instructions">
+            <h2>Gesture Instructions</h2>
+            <ul>
+                <p><strong>Index Finger Up (Draw Mode)</strong>: Enable drawing on the canvas. Lines are drawn with adjustable thickness.</p>
+                <p><strong>Two Fingers Up (Selection Mode)</strong>: Activate color selection using the index finger's x-coordinate.</p>
+                <p><strong>Thumb and Index Pinch (Thickness Control)</strong>: Adjust the drawing thickness for precise control.</p>
+                <p><strong>Five Fingers Up (Pen Up)</strong>: Move the brush without drawing.</p>
+                <p><strong>All Fingers Down (Clear Canvas)</strong>: Clear the canvas by resetting the overlay.</p>
+                <p><strong>Thumb, Index and Middle Fingers (Download)</strong>: Download the canvas - i.e. the drawings and the webcam shot it is drawn over - after a brief countdown.</p>
+            </ul>
+        </section>
+
+        <!-- Video feed container -->
+        <div class="video-container">
+            <img id="video" src="{% url 'video_feed' %}" alt="Video Feed">
+        </div>
+
+        <!-- Controls for enabling/disabling webcam -->
+        <div class="controls">
+            <button id="startBtn" class="btn">Start Webcam</button>
+            <button id="stopBtn" class="btn" disabled>Stop Webcam</button>
+        </div>
+
+        <!-- Footer section -->
+        <footer>
+            <p>Developed by <strong>Sayan Mondal</strong>, <strong>Biprajit Ghoshal</strong>, <strong>Shubham Chatterjee</strong></p>
+        </footer>
+    </div>
+
+    <!-- Link to external JavaScript -->
+    <script src="{% static 'painter/js/script.js' %}"></script>
+</body>
+</html>
